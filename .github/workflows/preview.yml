@@ -20,13 +20,13 @@ jobs:
           mkdir -p result
           blender -b -t 4 -noaudio -P gauntlet_original.py -- --preview
           test -s result/f_0001.png
-          test -s result/f_0048.png
-          test "$(sha256sum result/f_0001.png | cut -d' ' -f1)" != "$(sha256sum result/f_0048.png | cut -d' ' -f1)"
+          test -s result/f_0060.png
+          test "$(sha256sum result/f_0001.png | cut -d' ' -f1)" != "$(sha256sum result/f_0060.png | cut -d' ' -f1)"
       - name: Compose original electronic soundtrack
         run: python3 soundtrack.py result/race-music.wav 4
       - name: Export moving MP4 with sound
         run: |
-          ffmpeg -y -loglevel error -framerate 12 -i result/f_%04d.png -i result/race-music.wav -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2,hqdn3d=2:2:3:3" -c:v libx264 -pix_fmt yuv420p -crf 19 -c:a aac -b:a 128k -shortest -movflags +faststart result/gauntlet-original-3d-preview.mp4
+          ffmpeg -y -loglevel error -framerate 15 -i result/f_%04d.png -i result/race-music.wav -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2,hqdn3d=2.5:2:4:4.5" -c:v libx264 -pix_fmt yuv420p -crf 19 -c:a aac -b:a 128k -shortest -movflags +faststart result/gauntlet-original-3d-preview.mp4
           ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 result/gauntlet-original-3d-preview.mp4
           test -s result/gauntlet-original-3d-preview.mp4
       - uses: actions/upload-artifact@v4
@@ -34,5 +34,5 @@ jobs:
           name: original-3d-spinning-gauntlet
           path: |
             result/gauntlet-original-3d-preview.mp4
-            result/f_0024.png
+            result/f_0035.png
           retention-days: 5

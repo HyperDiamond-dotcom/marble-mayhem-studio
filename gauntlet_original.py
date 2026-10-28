@@ -9,13 +9,13 @@ from mathutils import Vector
 PREVIEW="--preview" in sys.argv
 OUT=os.environ.get("MARBLE_OUT","output")
 os.makedirs(OUT,exist_ok=True)
-FPS=12 if PREVIEW else 24
-NFR=48 if PREVIEW else 1680
-START=10 if PREVIEW else 0
-RES=(360,640) if PREVIEW else (1080,1920)
+FPS=15 if PREVIEW else 24
+NFR=60 if PREVIEW else 1680
+START=9 if PREVIEW else 0
+RES=(432,768) if PREVIEW else (1080,1920)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 s=bpy.context.scene;s.render.engine="CYCLES";s.cycles.device="CPU"
-s.cycles.samples=16 if PREVIEW else 32
+s.cycles.samples=20 if PREVIEW else 48
 s.view_layers[0].cycles.use_denoising=False
 s.render.resolution_x,s.render.resolution_y=RES
 s.render.resolution_percentage=100;s.render.fps=FPS
@@ -41,14 +41,14 @@ pink=mat("Vivid magenta",(.65,.06,.34),.13,.28,.7)
 gold=mat("Golden obstacles",(1,.54,.09),.55)
 colors=[(.96,.16,.24),(.18,.55,1),(.21,.96,.3),(1,.74,.07),(.78,.25,1)]
 ballm=[mat("Glass-like marble "+str(i),c,.25,.09,.2) for i,c in enumerate(colors)]
-TURNS=5.7;H=26;W=2.95;COUNT=900
+TURNS=5.7;H=26;W=3.35;COUNT=900
 def theta(u):return 2*pi*TURNS*u+.18*sin(8*pi*u)
 def radi(u):return 5.7+.5*sin(4*pi*u)+.22*cos(11*pi*u)
 def side(u):a=theta(u);return Vector((cos(a),sin(a),0))
 def path(u):
  a=theta(u);r=radi(u)
  return Vector((r*cos(a),r*sin(a),H*(1-u)+.2*sin(12*pi*u)))
-def lane(u,i):return path(u)+side(u)*((i-2)*.51)
+def lane(u,i):return path(u)+side(u)*((i-2)*.63)
 def tube(name,pts,r,m):
  cu=bpy.data.curves.new(name,"CURVE");cu.dimensions="3D";cu.bevel_depth=r;cu.bevel_resolution=3
  sp=cu.splines.new("POLY");sp.points.add(len(pts)-1)
@@ -77,7 +77,7 @@ for e in (-1,1):
  for dz,r,m in ((.17,.078,chrome),(-.12,.04,cyan)):
   tube("Sweeping 3D safety rail",[path(k/COUNT)+side(k/COUNT)*e*W/2+Vector((0,0,dz)) for k in range(COUNT+1)],r,m)
 for i in range(1,5):
- off=(i-2.5)*.51
+ off=(i-2.5)*.63
  tube("Glow lane delimiter",[path(k/COUNT)+side(k/COUNT)*off+Vector((0,0,.017)) for k in range(COUNT+1)],.014,cyan if i%2 else pink)
 pillar((0,0,H/2),.26,H+2,steel,"Main tower")
 for k in range(2,19,2):
@@ -89,17 +89,36 @@ for z in (4,12,20,25):
  bpy.context.object.data.materials.append(pink if z%2 else cyan)
 # Animated obstacles
 haz=[]
-for j,u in enumerate((.2,.38,.61,.79)):
- p=path(u)+Vector((0,0,.52))
- ob=pillar(p,.65,.16,gold if j%2 else pink,"Spinning hazard disc")
+for j,u in enumerate((.13,.25,.38,.52,.65,.78,.89)):
+ p=path(u)+Vector((0,0,.60))
+ ob=pillar(p,.43,.22,gold if j%2 else pink,"Spinning hazard disc")
  haz.append(ob)
+# Distinct mechanical gates and rotating hammer arms provide visual story beats.
+gear_arms=[]
+for j,h in enumerate(haz):
+ u=(.13,.25,.38,.52,.65,.78,.89)[j]
+ p=path(u)+Vector((0,0,.6))
+ for k in range(2):
+  obj=block("Industrial hazard paddle "+str(j)+"."+str(k),p,(1.75,.18,.18),gold if j%2 else chrome)
+  gear_arms.append((obj,p,j,k))
+# Cyan and magenta overhead warning gates define dramatic course sections.
+for j,u in enumerate((.09,.32,.56,.83,.96)):
+ mid=path(u);r=side(u);a=mid-r*(W/2+.15);b=mid+r*(W/2+.15)
+ tube("Warning gate "+str(j),[a+Vector((0,0,.08)),a+Vector((0,0,1.1)),(a+b)/2+Vector((0,0,1.34)),b+Vector((0,0,1.1)),b+Vector((0,0,.08))],.075,pink if j%2 else cyan)
+# The final finish portal (with large 3D end-ring) is shared with full length.
+finish=path(.991)
+tube("Victory illuminated arch",[finish-side(.991)*(W/2+.2)+Vector((0,0,.15)),finish-side(.991)*(W/2+.2)+Vector((0,0,1.8)),finish+Vector((0,0,2.5)),finish+side(.991)*(W/2+.2)+Vector((0,0,1.8)),finish+side(.991)*(W/2+.2)+Vector((0,0,.15))],.13,gold)
+for k in range(12):
+ v=.08+.075*k
+ p=path(v)+Vector((0,0,.12))
+ ballmark=pillar(p,.06,.07,gold if k%3==0 else cyan,"Course checkpoint marker")
 for i,c in enumerate(colors):
- bpy.ops.mesh.primitive_uv_sphere_add(segments=32,ring_count=20,radius=.24,location=lane(.005,i))
+ bpy.ops.mesh.primitive_uv_sphere_add(segments=32,ring_count=20,radius=.285,location=lane(.005,i))
  ob=bpy.context.object;ob.name=["RED","BLUE","GREEN","GOLD","PURPLE"][i]+" racing marble"
  ob.data.materials.append(ballm[i]);bpy.ops.object.shade_smooth()
  if i==0:balls=[]
  balls.append(ob)
-d=bpy.data.cameras.new("Tracking camera");d.type="PERSP";d.lens=34
+d=bpy.data.cameras.new("Tracking camera");d.type="PERSP";d.lens=46
 cam=bpy.data.objects.new("Tracking camera",d);s.collection.objects.link(cam);s.camera=cam
 def light(name,col,power):
  data=bpy.data.lights.new(name,"AREA");data.energy=power;data.color=col;data.shape="DISK";data.size=8
@@ -119,20 +138,41 @@ for frame in range(1,NFR+1):
  t=START+(frame-1)/FPS
  ps=[progress(t,i) for i in range(5)]
  for i,ob in enumerate(balls):
-  u=ps[i];ob.location=lane(u,i)+Vector((0,0,.24));ob.rotation_euler=(13*u,8*u+i,17*u)
+  u=ps[i];ob.location=lane(u,i)+Vector((0,0,.285));ob.rotation_euler=(13*u,8*u+i,17*u)
   ob.keyframe_insert("location",frame=frame);ob.keyframe_insert("rotation_euler",frame=frame)
  for i,ob in enumerate(haz):
   ob.rotation_euler[2]=(1 if i%2 else -1)*(t+i)
   ob.keyframe_insert("rotation_euler",frame=frame)
+ for obj,p,j,k in gear_arms:
+  obj.location=p
+  obj.rotation_euler[2]=((1 if j%2 else -1)*t*2.9)+(k*math.pi/2)+j
+  obj.keyframe_insert("rotation_euler",frame=frame)
  u=clamp(sum(ps)/5,.02,.98);tar=path(u);rad=side(u)
  motion=(path(min(.998,u+.008))-path(max(.002,u-.008))).normalized()
- cam.location=tar+rad*8.7-motion*1.7+Vector((0,0,3.6));look(cam,tar)
+ # Fast editorial camera cuts: tight low tracking, top-down reveal, reverse chase.
+ shot=int(max(0,t-START)/1.24)%4 if PREVIEW else int(max(0,t)/7)%4
+ if shot==0:
+  cam.location=tar+rad*5.1-motion*1.8+Vector((0,0,1.7));cam.data.lens=49
+ elif shot==1:
+  cam.location=tar+rad*7.2-motion*.5+Vector((0,0,6.7));cam.data.lens=40
+ elif shot==2:
+  cam.location=tar+rad*5.25+motion*2.8+Vector((0,0,2.15));cam.data.lens=49
+ else:
+  cam.location=tar+rad*5.9-motion*2.9+Vector((0,0,.9));cam.data.lens=46
+ look(cam,tar+Vector((0,0,.3)))
+ cam.data.keyframe_insert("lens",frame=frame)
  cam.keyframe_insert("location",frame=frame);cam.keyframe_insert("rotation_euler",frame=frame)
- key.location=tar+rad*4+Vector((0,0,5))
- fill.location=tar-rad*4+Vector((0,0,3))
- rim.location=tar-motion*3+Vector((0,0,6))
+ key.location=tar+rad*3+Vector((0,0,5))
+ fill.location=tar-rad*3+Vector((0,0,4))
+ rim.location=tar-motion*3+Vector((0,0,4))
  for l in (key,fill,rim):
   look(l,tar);l.keyframe_insert("location",frame=frame);l.keyframe_insert("rotation_euler",frame=frame)
+# Don't interpolate through editorial cuts; use hold-to-cut camera lens, not zoom smoothing.
+if cam.data.animation_data and cam.data.animation_data.action:
+ try:
+  for fc in cam.data.animation_data.action.fcurves:
+   for kp in fc.keyframe_points:kp.interpolation="CONSTANT"
+ except Exception: pass
 print("Rendering original Marble Mayhem 3D scene",NFR,"frames")
 bpy.ops.render.render(animation=True)
 print("Rendering completed")
