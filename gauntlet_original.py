@@ -1,0 +1,138 @@
+"""Original Marble Mayhem — fully 3D helical racing animation.
+Run: blender -b -P gauntlet_original.py -- --preview
+No external source code or assets. Choreographed movement; true 3D geometry,
+but not yet rigid-body collision physics.
+"""
+import bpy, math, os, sys
+from math import sin,cos,pi
+from mathutils import Vector
+PREVIEW="--preview" in sys.argv
+OUT=os.environ.get("MARBLE_OUT","output")
+os.makedirs(OUT,exist_ok=True)
+FPS=12 if PREVIEW else 24
+NFR=48 if PREVIEW else 1680
+START=10 if PREVIEW else 0
+RES=(360,640) if PREVIEW else (1080,1920)
+bpy.ops.wm.read_factory_settings(use_empty=True)
+s=bpy.context.scene;s.render.engine="CYCLES";s.cycles.device="CPU"
+s.cycles.samples=8 if PREVIEW else 32
+s.view_layers[0].cycles.use_denoising=False
+s.render.resolution_x,s.render.resolution_y=RES
+s.render.resolution_percentage=100;s.render.fps=FPS
+s.frame_start=1;s.frame_end=NFR
+s.render.image_settings.file_format="PNG";s.render.filepath=os.path.join(OUT,"f_")
+s.view_settings.view_transform="Standard"
+world=bpy.data.worlds.new("Studio");s.world=world;world.use_nodes=True
+bg=world.node_tree.nodes.get("Background");bg.inputs["Color"].default_value=(.055,.075,.12,1);bg.inputs["Strength"].default_value=.75
+
+def mat(name,c,metal=0,rough=.2,em=0):
+ m=bpy.data.materials.new(name);m.use_nodes=True
+ b=m.node_tree.nodes.get("Principled BSDF");b.inputs["Base Color"].default_value=(*c,1)
+ b.inputs["Metallic"].default_value=metal;b.inputs["Roughness"].default_value=rough
+ if em:
+  try:b.inputs["Emission Color"].default_value=(*c,1);b.inputs["Emission Strength"].default_value=em
+  except:pass
+ return m
+white=mat("Ivory enamel ramp",(.77,.84,.91),.14,.27)
+steel=mat("Brushed metallic frame",(.35,.48,.68),.65)
+chrome=mat("Bright rail chrome",(.79,.83,.93),.64)
+cyan=mat("Cyan luminous trim",(.06,.83,1),.1,.2,3)
+pink=mat("Vivid magenta",(.96,.1,.5),.13,.2,3)
+gold=mat("Golden obstacles",(1,.54,.09),.55)
+colors=[(.96,.16,.24),(.18,.55,1),(.21,.96,.3),(1,.74,.07),(.78,.25,1)]
+ballm=[mat("Glass-like marble "+str(i),c,.25,.09,.2) for i,c in enumerate(colors)]
+TURNS=5.7;H=26;W=2.95;COUNT=900
+def theta(u):return 2*pi*TURNS*u+.18*sin(8*pi*u)
+def radi(u):return 5.7+.5*sin(4*pi*u)+.22*cos(11*pi*u)
+def side(u):a=theta(u);return Vector((cos(a),sin(a),0))
+def path(u):
+ a=theta(u);r=radi(u)
+ return Vector((r*cos(a),r*sin(a),H*(1-u)+.2*sin(12*pi*u)))
+def lane(u,i):return path(u)+side(u)*((i-2)*.51)
+def tube(name,pts,r,m):
+ cu=bpy.data.curves.new(name,"CURVE");cu.dimensions="3D";cu.bevel_depth=r;cu.bevel_resolution=3
+ sp=cu.splines.new("POLY");sp.points.add(len(pts)-1)
+ for p,v in zip(sp.points,pts):p.co=(*v,1)
+ o=bpy.data.objects.new(name,cu);s.collection.objects.link(o);o.data.materials.append(m)
+ return o
+def block(name,loc,dims,m):
+ bpy.ops.mesh.primitive_cube_add(size=1,location=loc);o=bpy.context.object;o.name=name;o.dimensions=dims
+ bpy.ops.object.transform_apply(location=False,rotation=False,scale=True);o.data.materials.append(m)
+ b=o.modifiers.new("Soft edges","BEVEL");b.width=.045;b.segments=2
+ return o
+def pillar(loc,r,height,m,name):
+ bpy.ops.mesh.primitive_cylinder_add(vertices=16,radius=r,depth=height,location=loc)
+ o=bpy.context.object;o.name=name;o.data.materials.append(m);return o
+# True 3D continuous helical ramp, not a 2D projected track.
+verts=[];faces=[]
+for k in range(COUNT+1):
+ u=k/COUNT;c=path(u);rad=side(u)
+ verts.extend([tuple(c-rad*W/2),tuple(c+rad*W/2)])
+ if k<COUNT:
+  j=2*k;faces.append((j,j+1,j+3,j+2))
+mesh=bpy.data.meshes.new("3D helical ramp");mesh.from_pydata(verts,[],faces);mesh.update()
+o=bpy.data.objects.new("Five-lane multi-storey track",mesh);s.collection.objects.link(o);o.data.materials.append(white)
+sol=o.modifiers.new("Solid enamel track","SOLIDIFY");sol.thickness=.13
+for e in (-1,1):
+ for dz,r,m in ((.17,.078,chrome),(-.12,.04,cyan)):
+  tube("Sweeping 3D safety rail",[path(k/COUNT)+side(k/COUNT)*e*W/2+Vector((0,0,dz)) for k in range(COUNT+1)],r,m)
+for i in range(1,5):
+ off=(i-2.5)*.51
+ tube("Glow lane delimiter",[path(k/COUNT)+side(k/COUNT)*off+Vector((0,0,.017)) for k in range(COUNT+1)],.014,cyan if i%2 else pink)
+pillar((0,0,H/2),.26,H+2,steel,"Main tower")
+for k in range(2,19,2):
+ p=path(k/20)
+ pillar((p.x,p.y,(p.z-.5)/2),.055,p.z-.5,steel,"Vertical support")
+block("Shadow stage",(0,0,-1.3),(24,24,.3),steel)
+for z in (4,12,20,25):
+ bpy.ops.mesh.primitive_torus_add(major_radius=7.5,minor_radius=.05,location=(0,0,z))
+ bpy.context.object.data.materials.append(pink if z%2 else cyan)
+# Animated obstacles
+haz=[]
+for j,u in enumerate((.2,.38,.61,.79)):
+ p=path(u)+Vector((0,0,.52))
+ ob=pillar(p,.65,.16,gold if j%2 else pink,"Spinning hazard disc")
+ haz.append(ob)
+for i,c in enumerate(colors):
+ bpy.ops.mesh.primitive_uv_sphere_add(segments=32,ring_count=20,radius=.24,location=lane(.005,i))
+ ob=bpy.context.object;ob.name=["RED","BLUE","GREEN","GOLD","PURPLE"][i]+" racing marble"
+ ob.data.materials.append(ballm[i]);bpy.ops.object.shade_smooth()
+ if i==0:balls=[]
+ balls.append(ob)
+d=bpy.data.cameras.new("Tracking camera");d.type="PERSP";d.lens=34
+cam=bpy.data.objects.new("Tracking camera",d);s.collection.objects.link(cam);s.camera=cam
+def light(name,col,power):
+ data=bpy.data.lights.new(name,"AREA");data.energy=power;data.color=col;data.shape="DISK";data.size=8
+ ob=bpy.data.objects.new(name,data);s.collection.objects.link(ob);return ob
+key=light("White key",(1,1,1),2700)
+fill=light("Cyan fill",(.28,.82,1),1700)
+rim=light("Pink rim",(1,.25,.65),1600)
+def look(o,p):o.rotation_euler=(Vector(p)-Vector(o.location)).to_track_quat("-Z","Y").to_euler()
+def clamp(v,a,b):return max(a,min(b,v))
+def progress(t,i):
+ u=clamp((t-3)/61,0,1)
+ wiggle=.010*sin(10*pi*u+i*1.23)*sin(pi*u)
+ bias=[-.006,.004,.002,-.002,.001][i]*u
+ boost=(.016 if i==2 else -.012 if i==1 else 0)*u**6
+ return clamp(.004+(1-.008)*(u+wiggle+bias+boost),.004,.996)
+for frame in range(1,NFR+1):
+ t=START+(frame-1)/FPS
+ ps=[progress(t,i) for i in range(5)]
+ for i,ob in enumerate(balls):
+  u=ps[i];ob.location=lane(u,i)+Vector((0,0,.24));ob.rotation_euler=(13*u,8*u+i,17*u)
+  ob.keyframe_insert("location",frame=frame);ob.keyframe_insert("rotation_euler",frame=frame)
+ for i,ob in enumerate(haz):
+  ob.rotation_euler[2]=(1 if i%2 else -1)*(t+i)
+  ob.keyframe_insert("rotation_euler",frame=frame)
+ u=clamp(sum(ps)/5,.02,.98);tar=path(u);rad=side(u)
+ motion=(path(min(.998,u+.008))-path(max(.002,u-.008))).normalized()
+ cam.location=tar+rad*8.7-motion*1.7+Vector((0,0,3.6));look(cam,tar)
+ cam.keyframe_insert("location",frame=frame);cam.keyframe_insert("rotation_euler",frame=frame)
+ key.location=tar+rad*4+Vector((0,0,5))
+ fill.location=tar-rad*4+Vector((0,0,3))
+ rim.location=tar-motion*3+Vector((0,0,6))
+ for l in (key,fill,rim):
+  look(l,tar);l.keyframe_insert("location",frame=frame);l.keyframe_insert("rotation_euler",frame=frame)
+print("Rendering original Marble Mayhem 3D scene",NFR,"frames")
+bpy.ops.render.render(animation=True)
+print("Rendering completed")
