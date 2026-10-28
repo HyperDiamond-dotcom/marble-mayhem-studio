@@ -15,15 +15,15 @@ START=10 if PREVIEW else 0
 RES=(360,640) if PREVIEW else (1080,1920)
 bpy.ops.wm.read_factory_settings(use_empty=True)
 s=bpy.context.scene;s.render.engine="CYCLES";s.cycles.device="CPU"
-s.cycles.samples=8 if PREVIEW else 32
+s.cycles.samples=16 if PREVIEW else 32
 s.view_layers[0].cycles.use_denoising=False
 s.render.resolution_x,s.render.resolution_y=RES
 s.render.resolution_percentage=100;s.render.fps=FPS
 s.frame_start=1;s.frame_end=NFR
 s.render.image_settings.file_format="PNG";s.render.filepath=os.path.join(OUT,"f_")
-s.view_settings.view_transform="Standard"
+s.view_settings.view_transform="Standard";s.view_settings.exposure=-0.75
 world=bpy.data.worlds.new("Studio");s.world=world;world.use_nodes=True
-bg=world.node_tree.nodes.get("Background");bg.inputs["Color"].default_value=(.055,.075,.12,1);bg.inputs["Strength"].default_value=.75
+bg=world.node_tree.nodes.get("Background");bg.inputs["Color"].default_value=(.055,.075,.12,1);bg.inputs["Strength"].default_value=.45
 
 def mat(name,c,metal=0,rough=.2,em=0):
  m=bpy.data.materials.new(name);m.use_nodes=True
@@ -33,11 +33,11 @@ def mat(name,c,metal=0,rough=.2,em=0):
   try:b.inputs["Emission Color"].default_value=(*c,1);b.inputs["Emission Strength"].default_value=em
   except:pass
  return m
-white=mat("Ivory enamel ramp",(.77,.84,.91),.14,.27)
-steel=mat("Brushed metallic frame",(.35,.48,.68),.65)
-chrome=mat("Bright rail chrome",(.79,.83,.93),.64)
-cyan=mat("Cyan luminous trim",(.06,.83,1),.1,.2,3)
-pink=mat("Vivid magenta",(.96,.1,.5),.13,.2,3)
+white=mat("Ivory enamel ramp",(.38,.48,.62),.08,.34)
+steel=mat("Brushed metallic frame",(.18,.28,.4),.48)
+chrome=mat("Bright rail chrome",(.48,.55,.65),.55)
+cyan=mat("Cyan luminous trim",(.04,.57,.84),.1,.3,.75)
+pink=mat("Vivid magenta",(.65,.06,.34),.13,.28,.7)
 gold=mat("Golden obstacles",(1,.54,.09),.55)
 colors=[(.96,.16,.24),(.18,.55,1),(.21,.96,.3),(1,.74,.07),(.78,.25,1)]
 ballm=[mat("Glass-like marble "+str(i),c,.25,.09,.2) for i,c in enumerate(colors)]
@@ -104,9 +104,9 @@ cam=bpy.data.objects.new("Tracking camera",d);s.collection.objects.link(cam);s.c
 def light(name,col,power):
  data=bpy.data.lights.new(name,"AREA");data.energy=power;data.color=col;data.shape="DISK";data.size=8
  ob=bpy.data.objects.new(name,data);s.collection.objects.link(ob);return ob
-key=light("White key",(1,1,1),2700)
-fill=light("Cyan fill",(.28,.82,1),1700)
-rim=light("Pink rim",(1,.25,.65),1600)
+key=light("White key",(1,1,1),1100)
+fill=light("Cyan fill",(.28,.82,1),700)
+rim=light("Pink rim",(1,.25,.65),650)
 def look(o,p):o.rotation_euler=(Vector(p)-Vector(o.location)).to_track_quat("-Z","Y").to_euler()
 def clamp(v,a,b):return max(a,min(b,v))
 def progress(t,i):
